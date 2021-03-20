@@ -1,5 +1,4 @@
-from app import db
-from enum import Enum
+from app import db, ma
 
 
 class Couriers(db.Model):
@@ -11,11 +10,10 @@ class Couriers(db.Model):
 
     def __repr__(self):
         return (f'Couriers('
-                        f'courier_id={self.courier_id}, '
-                        f'courier_type="{self.courier_type}", '
-                        f'regions={self.regions}, '
-                        f'working_hours={self.working_hours})'
-               )
+                f'courier_id={self.courier_id}, '
+                f'courier_type="{self.courier_type}", '
+                f'regions={self.regions}, '
+                f'working_hours={self.working_hours})')
 
     def __str__(self):
         return f'<Couriers id: {self.courier_id}>'

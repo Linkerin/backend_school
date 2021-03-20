@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
+from marshmallow import ValidationError
 from app import app, db
 from app.models import Couriers
+from app.schemas import courier_schema
 import app.utils as ut
 
 
@@ -8,57 +10,31 @@ import app.utils as ut
 def home():
     return 'Candy Delivery App API'
 
+
 @app.route("/couriers", methods=['POST'])
 def couriers():
-    # post_keys = ['courier_id', 'courier_type', 'regions', 'working_hours']
+    valid_keys = ['courier_id', 'courier_type', 'regions', 'working_hours']
     invalid_ids = []
     couriers = []
 
-    data_types = {
-        'courier_id': int,
-        'courier_type': str,
-        'regions': list,
-        'working_hours': list
-    }
-
-    courier_type = ['foot', 'bike', 'car']
-    # Добавить валидацию, что значение поля - не пустое
     if request.method == 'POST':
         data = request.get_json()
         for element in data['data']:
             keys_list = list(element.keys())
             keys_list.sort()
-            if keys_list != list(data_types.keys()):
+            if keys_list != valid_keys:
                 invalid_ids.append(element['courier_id'])
                 continue
 
-            for key, item in element.items():
-                if type(element[key]) != data_types[key]:
+            #Validation of data contained in received JSON via schema
+            try:
+                courier = courier_schema.load(element)
+                if not Couriers.query.get(element['courier_id']):
+                    couriers.append(courier)
+                else:
                     invalid_ids.append(element['courier_id'])
-                    
-
-            # if element['courier_type'] not in courier_type:
-            #     bad_request['validation error']['couriers'].append(
-            #         {'id': element['courier_id']}
-            #     )
-            
-            for region in element['regions']:
-                if type(region) != int:
-                    invalid_ids.append(element['courier_id'])
-
-            # for hour in element['working_hours']:
-            #     if type(region) != str:
-            #         bad_request['validation error']['couriers'].append(
-            #         {'id': element['courier_id']}
-            #     )
-            if element['courier_id'] not in invalid_ids:
-                courier = Couriers(
-                                   courier_id=element['courier_id'],
-                                   courier_type=element['courier_type'],
-                                   regions=element['regions'],
-                                   working_hours=element['working_hours']
-                                   )
-                couriers.append(courier)
+            except ValidationError:
+                invalid_ids.append(element['courier_id'])
 
         if len(invalid_ids) != 0:
             validation_response = ut.validation_error(invalid_ids)
@@ -68,6 +44,7 @@ def couriers():
                 db.session.add(courier)
             db.session.commit()
             success_response = ut.couriers_created(data)
+
     else:
         return 405
 
