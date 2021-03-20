@@ -1,0 +1,9 @@
+.vscode
+venv/
+
+*.pyc
+__pycache__/
+
+openapi.yaml
+test.py
+couriers.session.sql
