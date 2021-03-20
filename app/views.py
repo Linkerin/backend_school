@@ -8,7 +8,7 @@ import app.utils as ut
 
 @app.route("/")
 def home():
-    return 'Candy Delivery App API'
+    return 'Candy Delivery App API', 200
 
 
 @app.route("/couriers", methods=['POST'])
@@ -39,13 +39,29 @@ def couriers():
         if len(invalid_ids) != 0:
             validation_response = ut.validation_error(invalid_ids)
             return jsonify(validation_response), 400
+
         else:
             for courier in couriers:
                 db.session.add(courier)
             db.session.commit()
             success_response = ut.couriers_created(data)
+        
+        return success_response, 201
 
-    else:
-        return 405
+    return 'Method Not Allowed', 405
 
-    return success_response, 201
+
+@app.route("/couriers/<int:courier_id>", methods=['GET', 'PATCH'])
+def courier_info(courier_id):
+    if request.method == 'PATCH':
+        courier = Couriers.query.get(courier_id)
+        if courier is not None:
+            return 'OK', 200
+
+        else:
+            return 'Not found', 404
+
+    if request.method == 'GET':
+        pass
+
+    return 'Method Not Allowed', 405
