@@ -54,14 +54,29 @@ def couriers():
 @app.route("/couriers/<int:courier_id>", methods=['GET', 'PATCH'])
 def courier_info(courier_id):
     if request.method == 'PATCH':
-        courier = Couriers.query.get(courier_id)
-        if courier is not None:
-            return 'OK', 200
+        courier = Couriers.query.filter_by(courier_id=courier_id)
 
+        if courier.first() is not None:
+            data = request.get_json()
+
+            for key in data.keys():
+                if key not in ['courier_type', 'regions', 'working_hours']:
+                    return 'Bad Request', 400
+
+            errors = courier_schema.validate(data, partial=True)
+            if len(errors) == 0:
+                courier.update(data, synchronize_session=False)
+                db.session.commit()
+            else:
+                return 'Bad Request', 400
+
+            return jsonify(courier_schema.dump(courier.first())), 200
         else:
-            return 'Not found', 404
+            return 'Not Found', 404
 
     if request.method == 'GET':
-        pass
+        courier = Couriers.query.get(courier_id)
+        courier = courier_schema.dump(courier)
+        return jsonify(courier), 200
 
     return 'Method Not Allowed', 405
