@@ -7,7 +7,7 @@ class Couriers(db.Model):
     courier_type = db.Column(db.String(8), nullable=False)
     regions = db.Column(db.PickleType, nullable=False)
     working_hours = db.Column(db.PickleType, nullable=False)
-    orders = db.relationship('Orders', backref='couriers', lazy=True)
+    orders = db.relationship('Orders', backref='courier', lazy=True)
 
     def __repr__(self):
         return (f'Couriers('
@@ -29,13 +29,14 @@ class Orders(db.Model):
     assigned_courier = db.Column(db.Integer,
                                  db.ForeignKey('couriers.courier_id')) 
     order_assigned = db.Column(db.Boolean, default=False)
+    assign_time = db.Column(db.DateTime)
     order_completed = db.Column(db.Boolean, default=False)
-
+    complete_time = db.Column(db.DateTime)
 
     def __repr__(self):
         return (f'Orders('
                 f'order_id={self.order_id}, '
-                f'weight="{self.weight}", '
+                f'weight={self.weight}, '
                 f'region={self.region}, '
                 f'delivery_hours={self.delivery_hours})')
 
