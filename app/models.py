@@ -28,10 +28,10 @@ class Orders(db.Model):
     delivery_hours = db.Column(db.PickleType, nullable=False)
     assigned_courier = db.Column(db.Integer,
                                  db.ForeignKey('couriers.courier_id')) 
-    order_assigned = db.Column(db.Boolean, default=False)
-    assign_time = db.Column(db.DateTime)
-    order_completed = db.Column(db.Boolean, default=False)
-    complete_time = db.Column(db.DateTime)
+    assigned = db.Column(db.Boolean, default=False)
+    assign_time = db.Column(db.DateTime(timezone=True))
+    completed = db.Column(db.Boolean, default=False)
+    complete_time = db.Column(db.DateTime(timezone=True))
 
     def __repr__(self):
         return (f'Orders('
@@ -42,3 +42,7 @@ class Orders(db.Model):
 
     def __str__(self):
         return f'<Order id: {self.order_id}>'
+
+
+# class OrdersBundle(db.Model):
+#     bundle_id = db.Column(db.Integer, primary_key=True)

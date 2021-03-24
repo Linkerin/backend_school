@@ -1,4 +1,6 @@
 from marshmallow import fields, validate, ValidationError
+from datetime import date, datetime
+from datetimerange import DateTimeRange
 from app import db, ma
 from app.models import Couriers, Orders
 
@@ -6,7 +8,7 @@ from app.models import Couriers, Orders
 def hours_validator(period):
     time_points = period.split('-')
     if len(time_points) != 2:
-        raise ValidationError('Working hours have to a period \
+        raise ValidationError('Working hours period should be \
                               separated by "-"')
 
     for time in time_points:
@@ -16,6 +18,18 @@ def hours_validator(period):
         if int(time_check[0]) not in range(0, 24) or \
                 int(time_check[1]) not in range(0, 60):
             raise ValidationError('Time format is not HH:MM')
+
+    # Checks whether there is no time inversion in the input range
+    today = date.today()
+    range_start = datetime.strptime(time_points[0], '%H:%M').time()
+    range_end = datetime.strptime(time_points[1], '%H:%M').time()
+    range_start_dt = datetime.combine(today, range_start)
+    range_end_dt = datetime.combine(today, range_end)
+    output_range = DateTimeRange(range_start_dt, range_end_dt)
+    try:
+        output_range.validate_time_inversion()
+    except ValueError:
+        raise ValidationError(f'Time inversion identified: "{period}"')
 
 
 class CouriersSchema(ma.SQLAlchemySchema):
@@ -53,11 +67,12 @@ class OrdersSchema(ma.SQLAlchemySchema):
                                  required=True,
                                  validate=validate.Length(min=1))
     assigned_courier = fields.Nested(CouriersSchema)
-    order_assigned = fields.Boolean(truthy={True}, falsy={False})
+    assigned = fields.Boolean(truthy={True}, falsy={False})
     assign_time = fields.DateTime()
-    order_completed = fields.Boolean(truthy={True}, falsy={False})
+    completed = fields.Boolean(truthy={True}, falsy={False})
     complete_time = fields.DateTime()
 
 
+# Schemas initialization
 courier_schema = CouriersSchema()
 order_schema = OrdersSchema()

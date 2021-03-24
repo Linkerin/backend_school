@@ -1,5 +1,7 @@
 from datetime import date, datetime
 from datetimerange import DateTimeRange
+from app import db
+from app.models import Orders
 
 
 def validation_error(invalid_ids):
@@ -64,6 +66,94 @@ def datetime_ranges(time_ranges):
         output_dt_ranges.append(output_range)
 
     return output_dt_ranges
+
+
+def assigned_orders_msg(assigned_orders, assign_time=None):
+    """ This function takes a `list` of orders' ids assigned
+    to the courier and their assign time in as a `datetime`
+    object. Output is a dictionary of assigned orders in the
+    following format:\n
+    `{"orders": [{"id": 1}, {"id": 2}],`\n
+    `"assign_time": "2021-03-24T18:39:11.404228+03:00"}`
+    """
+    if assign_time is not None:
+        orders_msg = {
+            'orders': [],
+            'assign_time': assign_time.isoformat()
+        }
+    else:
+        orders_msg = {
+            'orders': []
+        }
+        return orders_msg
+
+    for order_id in assigned_orders:
+        orders_msg['orders'].append({'id': order_id})
+
+    return orders_msg
+
+
+def regions_upd(new_regions, courier_id):
+    """This function takes a `list` of update courier's
+    regions and courier's id to check whethere his assigned
+    orders comply with new regions list and makes them
+    available for assignment if not.
+    """
+    orders = Orders.query.filter_by(assigned_courier=courier_id,
+                                    completed=False)
+    for order in orders:
+        if order.region not in new_regions:
+            order.assigned_courier = None,
+            order.assign_time = None,
+            order.assigned = False
+    db.session.commit()
+
+    return
+
+
+def courier_type_upd(new_type, courier_id):
+    """This function takes a `list` of updated courier's
+    type and courier's id to check whethere his assigned
+    orders comply with load capabilities and makes them
+    available for assignment if not.
+    """
+    orders = Orders.query.filter_by(assigned_courier=courier_id,
+                                    completed=False)
+    current_load = 0
+    for order in orders:
+        if CAPACITY[new_type] >= current_load + order.weight:
+            current_load += order.weight
+        else:
+            order.assigned_courier = None,
+            order.assign_time = None,
+            order.assigned = False
+    db.session.commit()
+
+    return
+
+def working_hours_upd(new_hours, courier_id):
+    """This function takes a `list` of updated courier's
+    working hours and courier's id to check whethere his
+    assigned orders comply with new hours and makes them
+    available for assignment if not.
+    """
+    courier_ranges = datetime_ranges(new_hours)
+    orders = Orders.query.filter_by(assigned_courier=courier_id,
+                                    completed=False)
+    for order in orders:
+        reassign = True
+        order_ranges = datetime_ranges(order.delivery_hours)
+        for c_range, o_range in product(courier_ranges, order_ranges):
+            if c_range.is_intersection(o_range):
+                reassign = False
+                break
+        if reassign:
+            order.assigned_courier = None,
+            order.assign_time = None,
+            order.assigned = False
+    db.session.commit()
+
+    return
 
 
 # Constant describing courier's load capacity

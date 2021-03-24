@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from marshmallow import ValidationError
 from datetime import datetime
 from itertools import product
+import pytz
+from sqlalchemy import types
 from app import app, db
 from app.models import Couriers, Orders
 from app.schemas import courier_schema, order_schema
@@ -37,7 +39,8 @@ def couriers():
                         couriers.append(courier)
                     else:
                         invalid_ids['couriers'].append(element['courier_id'])
-                except ValidationError:
+                except ValidationError as err:
+                    print(err)
                     invalid_ids['couriers'].append(element['courier_id'])
         except KeyError:
             return 'Bad Request', 400
@@ -70,11 +73,18 @@ def courier_info(courier_id):
                     return 'Bad Request', 400
 
             errors = courier_schema.validate(data, partial=True)
-            if len(errors) == 0:
-                courier.update(data, synchronize_session=False)
-                db.session.commit()
-            else:
+            if len(errors) != 0:
                 return 'Bad Request', 400
+            courier.update(data, synchronize_session=False)
+            db.session.commit()
+            # TODO: доработать запись None объектов в БД
+            for key, value in data.items():
+                if key == 'courier_type':
+                    ut.courier_type_upd(value, courier_id)
+                elif key == 'regions':
+                    ut.regions_upd(value, courier_id)
+                elif key == 'working_hours':
+                    ut.working_hours_upd(value, courier_id)
 
             return jsonify(courier_schema.dump(courier.first())), 200
         else:
@@ -132,41 +142,114 @@ def orders():
     return 'Method Not Allowed', 405
 
 
-@app.route('/orders/assign', methods=['POST'])
+@app.route("/orders/assign", methods=['POST'])
 def assign_order():
     if request.method == 'POST':
         data = request.get_json()
-        if list(data.keys()) != ['courier_id']:
+        try:
+            if list(data.keys()) != ['courier_id']:
+                bad_request_msg = {
+                    'Error': 'Additional properties are not allowed'
+                }
+                return jsonify(bad_request_msg), 400
+        except AttributeError:
             return 'Bad Request', 400
 
         errors = courier_schema.validate(data, partial=True)
         if len(errors) != 0:
-            return 'Bad Request', 400
+            return 'Bad Request', 400  # TODO: сделать пояснения ошибок
 
         courier = Couriers.query.get(data['courier_id'])
         if courier is None:
-            return 'Bad Request', 400
+            bad_request_msg = {
+                'Error': 'Courier id was not found'
+            }
+            return jsonify(bad_request_msg), 400
+
+        if len(courier.orders) != 0:
+            assigned_orders = []
+            for order in courier.orders:
+                if order.completed is False:
+                    assigned_orders.append(order.order_id)
+            if len(assigned_orders) != 0:
+                assign_time = courier.orders[0].assign_time
+                orders_msg = ut.assigned_orders_msg(assigned_orders,
+                                                    assign_time)
+                return jsonify(orders_msg), 200
+
         courier_ranges = ut.datetime_ranges(courier.working_hours)
         courier_capacity = ut.CAPACITY[courier.courier_type]
 
-        available_orders = Orders.query.filter_by(order_assigned=False)
+        available_orders = Orders.query.filter_by(assigned=False)
+        assign_time = datetime.now(tz=pytz.timezone('Europe/Moscow'))
+        assigned_orders = []
         for order in available_orders:
             if order.region in courier.regions and \
                     courier_capacity >= order.weight:
                 order_ranges = ut.datetime_ranges(order.delivery_hours)
                 for c_range, o_range in product(courier_ranges, order_ranges):
-                    try:
-                        if c_range.is_intersection(o_range):
-                            order.assigned_courier = courier.courier_id
-                            order.assign_time = datetime.now()
-                            order.order_assigned = True
-                            db.session.commit()
-                            break
-                    except ValueError:
-                        # TODO: дописать валидатор времени работы при загрузке курьерских данных
-                        return 'Impossible time ranges', 400
+                    if c_range.is_intersection(o_range):
+                        order.assigned_courier = courier.courier_id
+                        order.assign_time = assign_time
+                        order.assigned = True
+                        courier_capacity -= order.weight
+                        assigned_orders.append(order.order_id)
+                        break
                 continue
             else:
                 continue
+
+        if len(assigned_orders) != 0:
+            db.session.commit()
+            assignment_msg = ut.assigned_orders_msg(assigned_orders,
+                                                    assign_time)
+        else:
+            assignment_msg = ut.assigned_orders_msg(assigned_orders)
+
+        return jsonify(assignment_msg), 200
+
+    return 'Method Not Allowed', 405
+
+
+@app.route("/orders/complete", methods=['POST'])
+def order_completed():
+    if request.method == 'POST':
+        valid_keys = ['complete_time', 'courier_id', 'order_id']
+        data = request.get_json()
+
+        try:
+            keys_list = list(data.keys())
+        except AttributeError:
+            return 'Bad Request', 400
+
+        keys_list.sort()
+        if keys_list != valid_keys:
+            return 'Bad Request', 400
+
+        order = Orders.query.get(data['order_id'])
+        if order is None or order.assigned is False or \
+                order.assigned_courier != data['courier_id']:
+            return 'Bad Request', 400
+
+        date_format = '%Y-%m-%dT%H:%M:%S.%f%z'
+        if data['complete_time'][10] != 'T':
+            date_format = '%Y-%m-%d %H:%M:%S.%f%z'
+        try:
+            complete_time = datetime.strptime(data['complete_time'],
+                                              date_format)
+        except ValueError:
+            bad_request_msg = {
+                'Error': 'Datetime format should be ISO 8601 or RFC3339'
+            }
+            return jsonify(bad_request_msg), 400
+
+        order.completed = True
+        order.complete_time = complete_time
+        db.session.commit()
+        success_msg = {
+            'order_id': order.order_id
+        }
+
+        return jsonify(success_msg), 200
 
     return 'Method Not Allowed', 405
