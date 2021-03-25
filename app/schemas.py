@@ -8,8 +8,8 @@ from app.models import Couriers, Orders
 def hours_validator(period):
     time_points = period.split('-')
     if len(time_points) != 2:
-        raise ValidationError('Working hours period should be \
-                              separated by "-"')
+        error = 'Working hours period should be separated by "-"'
+        raise ValidationError(error)
 
     for time in time_points:
         time_check = time.split(':')

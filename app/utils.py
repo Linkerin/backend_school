@@ -95,7 +95,7 @@ def assigned_orders_msg(assigned_orders, assign_time=None):
 
 def regions_upd(new_regions, courier_id):
     """This function takes a `list` of update courier's
-    regions and courier's id to check whethere his assigned
+    regions and courier's id to check whether his assigned
     orders comply with new regions list and makes them
     available for assignment if not.
     """
@@ -103,8 +103,8 @@ def regions_upd(new_regions, courier_id):
                                     completed=False)
     for order in orders:
         if order.region not in new_regions:
-            order.assigned_courier = None,
-            order.assign_time = None,
+            order.assigned_courier = None
+            order.assign_time = None
             order.assigned = False
     db.session.commit()
 
@@ -113,7 +113,7 @@ def regions_upd(new_regions, courier_id):
 
 def courier_type_upd(new_type, courier_id):
     """This function takes a `list` of updated courier's
-    type and courier's id to check whethere his assigned
+    type and courier's id to check whether his assigned
     orders comply with load capabilities and makes them
     available for assignment if not.
     """
@@ -124,16 +124,17 @@ def courier_type_upd(new_type, courier_id):
         if CAPACITY[new_type] >= current_load + order.weight:
             current_load += order.weight
         else:
-            order.assigned_courier = None,
-            order.assign_time = None,
+            order.assigned_courier = None
+            order.assign_time = None
             order.assigned = False
     db.session.commit()
 
     return
 
+
 def working_hours_upd(new_hours, courier_id):
     """This function takes a `list` of updated courier's
-    working hours and courier's id to check whethere his
+    working hours and courier's id to check whether his
     assigned orders comply with new hours and makes them
     available for assignment if not.
     """
@@ -148,8 +149,8 @@ def working_hours_upd(new_hours, courier_id):
                 reassign = False
                 break
         if reassign:
-            order.assigned_courier = None,
-            order.assign_time = None,
+            order.assigned_courier = None
+            order.assign_time = None
             order.assigned = False
     db.session.commit()
 

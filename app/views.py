@@ -39,8 +39,7 @@ def couriers():
                         couriers.append(courier)
                     else:
                         invalid_ids['couriers'].append(element['courier_id'])
-                except ValidationError as err:
-                    print(err)
+                except ValidationError:
                     invalid_ids['couriers'].append(element['courier_id'])
         except KeyError:
             return 'Bad Request', 400
@@ -77,7 +76,11 @@ def courier_info(courier_id):
                 return 'Bad Request', 400
             courier.update(data, synchronize_session=False)
             db.session.commit()
-            # TODO: доработать запись None объектов в БД
+
+            """ This block of code checks whether new courier info
+                complies with assigned orders and dismisses them if
+                necessary.
+            """
             for key, value in data.items():
                 if key == 'courier_type':
                     ut.courier_type_upd(value, courier_id)

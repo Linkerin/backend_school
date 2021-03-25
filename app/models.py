@@ -27,7 +27,7 @@ class Orders(db.Model):
     region = db.Column(db.Integer, nullable=False)
     delivery_hours = db.Column(db.PickleType, nullable=False)
     assigned_courier = db.Column(db.Integer,
-                                 db.ForeignKey('couriers.courier_id')) 
+                                 db.ForeignKey('couriers.courier_id'))
     assigned = db.Column(db.Boolean, default=False)
     assign_time = db.Column(db.DateTime(timezone=True))
     completed = db.Column(db.Boolean, default=False)
