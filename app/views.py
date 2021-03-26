@@ -5,7 +5,7 @@ from itertools import product
 import pytz
 from sqlalchemy import types
 from app import app, db
-from app.models import Couriers, Orders
+from app.models import Couriers, Orders, OrdersBundle
 from app.schemas import courier_schema, order_schema
 import app.utils as ut
 
@@ -96,8 +96,15 @@ def courier_info(courier_id):
     # TODO: rating and earnings will be added at stage 6
     if request.method == 'GET':
         courier = Couriers.query.get(courier_id)
-        courier = courier_schema.dump(courier)
-        return jsonify(courier), 200
+        for bundle in courier.bundles:
+            if bundle.completed is True:
+                not_completed = False
+
+        if len(courier.bundles) == 0 or not_completed is False:
+            courier = courier_schema.dump(courier)
+            del courier['earnings']
+            del courier['rating']
+            return jsonify(courier), 200
 
     return 'Method Not Allowed', 405
 
@@ -186,6 +193,7 @@ def assign_order():
         available_orders = Orders.query.filter_by(assigned=False)
         assign_time = datetime.now(tz=pytz.timezone('Europe/Moscow'))
         assigned_orders = []
+        bundle_id = ut.bundle_id()
         for order in available_orders:
             if order.region in courier.regions and \
                     courier_capacity >= order.weight:
@@ -195,6 +203,7 @@ def assign_order():
                         order.assigned_courier = courier.courier_id
                         order.assign_time = assign_time
                         order.assigned = True
+                        order.bundle = bundle_id
                         courier_capacity -= order.weight
                         assigned_orders.append(order.order_id)
                         break
@@ -203,7 +212,13 @@ def assign_order():
                 continue
 
         if len(assigned_orders) != 0:
+            bundle = OrdersBundle(bundle_id=bundle_id,
+                                  courier_id=courier.courier_id,
+                                  init_courier_type=courier.courier_type,
+                                  assign_time=assign_time)
+            db.session.add(bundle)
             db.session.commit()
+            # TODO: переписать, чтобы назначеные заказы брались именно из БД
             assignment_msg = ut.assigned_orders_msg(assigned_orders,
                                                     assign_time)
         else:
@@ -248,6 +263,13 @@ def order_completed():
 
         order.completed = True
         order.complete_time = complete_time
+        bundle = OrdersBundle.query.get(order.bundle)
+        bundle.earning += (ut.EARNING_COEF[bundle.init_courier_type] *
+                           ut.ORDER_EARNING)
+        bundle_finished = ut.bundle_finished(bundle)
+        if bundle_finished is True:
+            ut.complete_bundle(bundle)
+
         db.session.commit()
         success_msg = {
             'order_id': order.order_id

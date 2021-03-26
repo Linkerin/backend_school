@@ -49,6 +49,8 @@ class CouriersSchema(ma.SQLAlchemySchema):
     working_hours = fields.List(fields.Str(validate=hours_validator),
                                 required=True,
                                 validate=validate.Length(min=1))
+    earnings = fields.Int(strict=True)
+    rating = fields.Float()
 
 
 class OrdersSchema(ma.SQLAlchemySchema):

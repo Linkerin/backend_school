@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from datetimerange import DateTimeRange
 from app import db
-from app.models import Orders
+from app.models import Orders, OrdersBundle
 
 
 def validation_error(invalid_ids):
@@ -106,7 +106,18 @@ def regions_upd(new_regions, courier_id):
             order.assigned_courier = None
             order.assign_time = None
             order.assigned = False
+            order.bundle = None
     db.session.commit()
+
+    bundle = (OrdersBundle.query.filter_by(courier_id=courier_id,
+                                           completed=False)
+                                .order_by(OrdersBundle
+                                          .bundle_id.desc())
+                                .first())
+    finished = bundle_finished(bundle)
+    if finished is True:
+        complete_bundle(bundle)
+        db.session.commit()
 
     return
 
@@ -127,7 +138,18 @@ def courier_type_upd(new_type, courier_id):
             order.assigned_courier = None
             order.assign_time = None
             order.assigned = False
+            order.bundle = None
     db.session.commit()
+
+    bundle = (OrdersBundle.query.filter_by(courier_id=courier_id,
+                                           completed=False)
+                                .order_by(OrdersBundle
+                                          .bundle_id.desc())
+                                .first())
+    finished = bundle_finished(bundle)
+    if finished is True:
+        complete_bundle(bundle)
+        db.session.commit()
 
     return
 
@@ -152,14 +174,74 @@ def working_hours_upd(new_hours, courier_id):
             order.assigned_courier = None
             order.assign_time = None
             order.assigned = False
+            order.bundle = None
     db.session.commit()
+
+    bundle = (OrdersBundle.query.filter_by(courier_id=courier_id,
+                                           completed=False)
+                                .order_by(OrdersBundle
+                                          .bundle_id.desc())
+                                .first())
+    finished = bundle_finished(bundle)
+    if finished is True:
+        complete_bundle(bundle)
+        db.session.commit()
 
     return
 
 
-# Constant describing courier's load capacity
+def bundle_id():
+    """ Function creates orders' bundle id: #1 if there are no bundles
+        in the table and 'latest + 1' if the table is not empty.
+    """
+    last_bundle = OrdersBundle.query.order_by(OrdersBundle.bundle_id
+                                              .desc()).first()
+    if last_bundle is not None:
+        return last_bundle.bundle_id
+    else:
+        return 1
+
+
+def bundle_finished(bundle):
+    """ Function checks whether all orders
+        in the bundle are finished or not
+        and returns respective boolean value
+    """
+    for order in bundle.orders:
+        if order.completed is False:
+            return False
+    return True
+
+
+def complete_bundle(bundle, complete_time=None):
+    if complete_time is None:
+        complete_time = datetime.now()
+    bundle.completed = True
+    bundle.complete_time = complete_time
+    courier = Couriers.query.get(courier_id=bundle.courier_id)
+    courier.earnings += bundle.earning
+
+
+# def rating(courier):
+#     for bundle in courier.bundles:
+
+
+
+""" Constant describing courier's load capacity """
 CAPACITY = {
     'foot': 10,
     'bike': 15,
     'car': 50
 }
+
+
+""" Constant containing earnings coefficient
+    per order depending on courier type
+"""
+EARNING_COEF = {
+    'foot': 2,
+    'bike': 5,
+    'car': 9
+}
+
+ORDER_EARNING = 500
