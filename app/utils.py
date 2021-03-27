@@ -76,7 +76,7 @@ def assigned_orders_msg(assigned_orders, assign_time=None):
     a `datetime` object. Output is a dictionary of assigned
     orders in the following format:\n
     `{"orders": [{"id": 1}, {"id": 2}],`\n
-    `"assign_time": "2021-03-24T18:39:11.404228+03:00"}`
+    `"assign_time": "2021-03-24T18:39:11.404228+00:00"}`
     """
     if assign_time is not None:
         orders_msg = {
@@ -183,6 +183,7 @@ def upd_bundle_check(courier_id):
         bundle.completed = True
         bundle.complete_time = datetime.now(tz=pytz.timezone('Europe/Moscow'))
         bundle.deleted = True
+        db.session.commit()
         return
 
     finished = bundle_finished(bundle)
@@ -245,9 +246,6 @@ def order_delivery_time(order, complete_time):
         a difference between completion time and previous
         order completion time.
     """
-    # TODO: !!! КОСТЫЛЬ SQLITE: УДАЛИТЬ !!!
-    complete_time = complete_time.replace(tzinfo=None)
-
     bundle_orders = Orders.query.filter_by(bundle=order.bundle)
     first_order = True
     for b_order in bundle_orders:
@@ -258,12 +256,13 @@ def order_delivery_time(order, complete_time):
     if first_order is True:
         delivery_time = complete_time - order.assign_time
     else:
-        prev_order = (Orders.query.filter_by(bundle=order.bundle)
+        prev_order = (Orders.query.filter_by(bundle=order.bundle,
+                                             completed=True)
                                   .order_by(Orders.complete_time.desc())
                                   .first())
         delivery_time = complete_time - prev_order.complete_time
-        if delivery_time < timedelta():
-            return 'Order completion time is less than the previous'
+    if delivery_time < timedelta():
+        return 'Order completion time is less than the previous'
 
     return delivery_time.total_seconds()
 

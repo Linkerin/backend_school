@@ -63,6 +63,7 @@ class OrdersBundle(db.Model):
 
     def __repr__(self):
         return (f'OrdersBundle('
+                f'bundle_id={self.bundle_id}, '
                 f'courier_id={self.courier_id}, '
                 f'init_courier_type="{self.init_courier_type}", '
                 f'assign_time={self.assign_time})')
