@@ -1,13 +1,13 @@
+import pytz
 from flask import Flask, request, jsonify
-from marshmallow import ValidationError
 from datetime import datetime
 from itertools import product
-import pytz
+from marshmallow import ValidationError
 from sqlalchemy import types
-from app import app, db
-from app.models import Couriers, Orders, OrdersBundle
-from app.schemas import courier_schema, order_schema
 import app.utils as ut
+from app import app, db
+from app.models import Couriers, Orders, OrdersBundle, Regions
+from app.schemas import courier_schema, order_schema
 
 
 @app.route("/")
@@ -22,6 +22,7 @@ def couriers():
                       'regions', 'working_hours']
         invalid_ids = {'couriers': []}
         couriers = []
+        errors = []
 
         data = request.get_json()
         try:
@@ -29,6 +30,9 @@ def couriers():
                 keys_list = list(element.keys())
                 keys_list.sort()
                 if keys_list != valid_keys:
+                    errors.append({
+                        f"id {element['order_id']}": 'Incorrect properties'
+                    })
                     invalid_ids['couriers'].append(element['courier_id'])
                     continue
 
@@ -38,14 +42,21 @@ def couriers():
                     if not Couriers.query.get(element['courier_id']):
                         couriers.append(courier)
                     else:
+                        errors.append({
+                            f"id {element['order_id']}": 'id already exists'
+                        })
                         invalid_ids['couriers'].append(element['courier_id'])
-                except ValidationError:
+                except ValidationError as err:
                     invalid_ids['couriers'].append(element['courier_id'])
+                    errors.append({f"id {element['courier_id']}": str(err)})
         except KeyError:
-            return 'Bad Request', 400
+            bad_request_msg = {
+                'Error': "'data' key was not found"
+            }
+            return jsonify(bad_request_msg), 400
 
         if len(invalid_ids['couriers']) != 0:
-            validation_response = ut.validation_error(invalid_ids)
+            validation_response = ut.validation_error(invalid_ids, errors)
             return jsonify(validation_response), 400
 
         else:
@@ -69,11 +80,17 @@ def courier_info(courier_id):
 
             for key in data.keys():
                 if key not in ['courier_type', 'regions', 'working_hours']:
-                    return 'Bad Request', 400
+                    bad_request_msg = {
+                        'Error': 'Incorrect properties'
+                    }
+                    return jsonify(bad_request_msg), 400
 
             errors = courier_schema.validate(data, partial=True)
             if len(errors) != 0:
-                return 'Bad Request', 400
+                bad_request_msg = {
+                    'Error': errors
+                }
+                return jsonify(bad_request_msg), 400
             courier.update(data, synchronize_session=False)
             db.session.commit()
 
@@ -88,23 +105,29 @@ def courier_info(courier_id):
                     ut.regions_upd(value, courier_id)
                 elif key == 'working_hours':
                     ut.working_hours_upd(value, courier_id)
+            response = courier_schema.dump(courier.first())
+            del response['earnings']
+            del response['rating']
+            return jsonify(response), 200
 
-            return jsonify(courier_schema.dump(courier.first())), 200
         else:
             return 'Not Found', 404
 
-    # TODO: rating and earnings will be added at stage 6
     if request.method == 'GET':
         courier = Couriers.query.get(courier_id)
+        not_completed = True
         for bundle in courier.bundles:
-            if bundle.completed is True:
+            if bundle.completed is True and bundle.deleted is False:
                 not_completed = False
 
-        if len(courier.bundles) == 0 or not_completed is False:
+        if len(courier.bundles) == 0 or not_completed is True:
             courier = courier_schema.dump(courier)
             del courier['earnings']
             del courier['rating']
-            return jsonify(courier), 200
+        else:
+            courier = courier_schema.dump(courier)
+
+        return jsonify(courier), 200
 
     return 'Method Not Allowed', 405
 
@@ -115,6 +138,7 @@ def orders():
         valid_keys = ['delivery_hours', 'order_id', 'region', 'weight']
         invalid_ids = {'orders': []}
         orders = []
+        errors = []
 
         data = request.get_json()
         try:
@@ -123,6 +147,9 @@ def orders():
                 keys_list.sort()
                 if keys_list != valid_keys:
                     invalid_ids['orders'].append(element['order_id'])
+                    errors.append({
+                        f"id {element['order_id']}": 'Incorrect properties'
+                    })
                     continue
 
                 # Validation of data contained in received JSON via schema
@@ -132,13 +159,20 @@ def orders():
                         orders.append(order)
                     else:
                         invalid_ids['orders'].append(element['order_id'])
-                except ValidationError:
+                        errors.append({
+                            f"id {element['order_id']}": 'id already exists'
+                        })
+                except ValidationError as err:
                     invalid_ids['orders'].append(element['order_id'])
+                    errors.append({f"id {element['order_id']}": str(err)})
         except KeyError:
-            return 'Bad Request', 400
+            bad_request_msg = {
+                'Error': "'data' key was not found"
+            }
+            return jsonify(bad_request_msg), 400
 
         if len(invalid_ids['orders']) != 0:
-            validation_response = ut.validation_error(invalid_ids)
+            validation_response = ut.validation_error(invalid_ids, errors)
             return jsonify(validation_response), 400
 
         else:
@@ -167,7 +201,10 @@ def assign_order():
 
         errors = courier_schema.validate(data, partial=True)
         if len(errors) != 0:
-            return 'Bad Request', 400  # TODO: сделать пояснения ошибок
+            bad_request_msg = {
+                'Error': errors
+            }
+            return jsonify(bad_request_msg), 400
 
         courier = Couriers.query.get(data['courier_id'])
         if courier is None:
@@ -176,16 +213,14 @@ def assign_order():
             }
             return jsonify(bad_request_msg), 400
 
-        if len(courier.orders) != 0:
-            assigned_orders = []
-            for order in courier.orders:
-                if order.completed is False:
-                    assigned_orders.append(order.order_id)
-            if len(assigned_orders) != 0:
-                assign_time = courier.orders[0].assign_time
-                orders_msg = ut.assigned_orders_msg(assigned_orders,
-                                                    assign_time)
-                return jsonify(orders_msg), 200
+        # The following block checks whether the courier already
+        # has assigned and not completed orders
+        orders = Orders.query.filter_by(assigned_courier=data['courier_id'],
+                                        completed=False).all()
+        if len(orders) != 0:
+            orders_msg = ut.assigned_orders_msg(orders,
+                                                orders[0].assign_time)
+            return jsonify(orders_msg), 200
 
         courier_ranges = ut.datetime_ranges(courier.working_hours)
         courier_capacity = ut.CAPACITY[courier.courier_type]
@@ -205,7 +240,7 @@ def assign_order():
                         order.assigned = True
                         order.bundle = bundle_id
                         courier_capacity -= order.weight
-                        assigned_orders.append(order.order_id)
+                        assigned_orders.append(order)
                         break
                 continue
             else:
@@ -218,9 +253,12 @@ def assign_order():
                                   assign_time=assign_time)
             db.session.add(bundle)
             db.session.commit()
-            # TODO: переписать, чтобы назначеные заказы брались именно из БД
-            assignment_msg = ut.assigned_orders_msg(assigned_orders,
-                                                    assign_time)
+            orders = (Orders.query
+                      .filter_by(completed=False,
+                                 assigned_courier=courier.courier_id)
+                      .all())
+            assignment_msg = ut.assigned_orders_msg(orders,
+                                                    orders[0].assign_time)
         else:
             assignment_msg = ut.assigned_orders_msg(assigned_orders)
 
@@ -238,16 +276,25 @@ def order_completed():
         try:
             keys_list = list(data.keys())
         except AttributeError:
-            return 'Bad Request', 400
+            bad_request_msg = {
+                'Error': 'POST data is incorrect'
+            }
+            return jsonify(bad_request_msg), 400
 
         keys_list.sort()
         if keys_list != valid_keys:
-            return 'Bad Request', 400
+            bad_request_msg = {
+                'Error': 'Incorrect properties'
+            }
+            return jsonify(bad_request_msg), 400
 
         order = Orders.query.get(data['order_id'])
         if order is None or order.assigned is False or \
                 order.assigned_courier != data['courier_id']:
-            return 'Bad Request', 400
+            bad_request_msg = {
+                'Error': 'Sent values are incorrect'
+            }
+            return jsonify(bad_request_msg), 400
 
         date_format = '%Y-%m-%dT%H:%M:%S.%f%z'
         if data['complete_time'][10] != 'T':
@@ -261,16 +308,40 @@ def order_completed():
             }
             return jsonify(bad_request_msg), 400
 
-        order.completed = True
-        order.complete_time = complete_time
-        bundle = OrdersBundle.query.get(order.bundle)
-        bundle.earning += (ut.EARNING_COEF[bundle.init_courier_type] *
-                           ut.ORDER_EARNING)
-        bundle_finished = ut.bundle_finished(bundle)
-        if bundle_finished is True:
-            ut.complete_bundle(bundle)
+        delivery_time = ut.order_delivery_time(order, complete_time)
+        if type(delivery_time) != float:
+            bad_request_msg = {
+                'Error': f'{delivery_time}'
+            }
+            return jsonify(bad_request_msg), 400
 
-        db.session.commit()
+        if order.completed is False:
+            order.completed = True
+            order.complete_time = complete_time
+            order.delivery_time = delivery_time
+            db.session.commit()
+
+            # The following block updates average delivery time
+            # per region when the order is completed
+            regions = (Regions.query.filter_by(region_id=order.region,
+                                               courier_id=data['courier_id'])
+                                    .first())
+            if regions is not None:
+                average = regions.avg_delivery_time
+                average = (average + delivery_time) / 2
+                regions.avg_delivery_time = average
+            else:
+                new_region = Regions(region_id=order.region,
+                                     courier_id=order.assigned_courier,
+                                     avg_delivery_time=delivery_time)
+                db.session.add(new_region)
+
+            bundle = OrdersBundle.query.get(order.bundle)
+            bundle_finished = ut.bundle_finished(bundle)
+            if bundle_finished is True:
+                ut.complete_bundle(bundle, complete_time)
+            db.session.commit()
+
         success_msg = {
             'order_id': order.order_id
         }

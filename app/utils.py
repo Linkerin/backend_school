@@ -1,10 +1,11 @@
-from datetime import date, datetime
+import pytz
+from datetime import date, datetime, timedelta
 from datetimerange import DateTimeRange
 from app import db
-from app.models import Orders, OrdersBundle
+from app.models import Couriers, Orders, OrdersBundle, Regions
 
 
-def validation_error(invalid_ids):
+def validation_error(invalid_ids, errors):
     """ Message that will be returned for `'POST'`
         routings in case some invalid data were sent. \n
         Example:\n
@@ -15,7 +16,8 @@ def validation_error(invalid_ids):
     bad_request = {
         'validation error': {
             data_type: []
-        }
+        },
+        'Errors': errors
     }
 
     for item in unique_ids:
@@ -69,10 +71,10 @@ def datetime_ranges(time_ranges):
 
 
 def assigned_orders_msg(assigned_orders, assign_time=None):
-    """ This function takes a `list` of orders' ids assigned
-    to the courier and their assign time in as a `datetime`
-    object. Output is a dictionary of assigned orders in the
-    following format:\n
+    """ This function takes a `list` of `Orders` objects
+    assigned to the courier and their assign time in as
+    a `datetime` object. Output is a dictionary of assigned
+    orders in the following format:\n
     `{"orders": [{"id": 1}, {"id": 2}],`\n
     `"assign_time": "2021-03-24T18:39:11.404228+03:00"}`
     """
@@ -87,7 +89,8 @@ def assigned_orders_msg(assigned_orders, assign_time=None):
         }
         return orders_msg
 
-    for order_id in assigned_orders:
+    for order in assigned_orders:
+        order_id = order.order_id
         orders_msg['orders'].append({'id': order_id})
 
     return orders_msg
@@ -108,16 +111,7 @@ def regions_upd(new_regions, courier_id):
             order.assigned = False
             order.bundle = None
     db.session.commit()
-
-    bundle = (OrdersBundle.query.filter_by(courier_id=courier_id,
-                                           completed=False)
-                                .order_by(OrdersBundle
-                                          .bundle_id.desc())
-                                .first())
-    finished = bundle_finished(bundle)
-    if finished is True:
-        complete_bundle(bundle)
-        db.session.commit()
+    upd_bundle_check(courier_id)
 
     return
 
@@ -140,16 +134,7 @@ def courier_type_upd(new_type, courier_id):
             order.assigned = False
             order.bundle = None
     db.session.commit()
-
-    bundle = (OrdersBundle.query.filter_by(courier_id=courier_id,
-                                           completed=False)
-                                .order_by(OrdersBundle
-                                          .bundle_id.desc())
-                                .first())
-    finished = bundle_finished(bundle)
-    if finished is True:
-        complete_bundle(bundle)
-        db.session.commit()
+    upd_bundle_check(courier_id)
 
     return
 
@@ -176,12 +161,30 @@ def working_hours_upd(new_hours, courier_id):
             order.assigned = False
             order.bundle = None
     db.session.commit()
+    upd_bundle_check(courier_id)
 
+    return
+
+
+def upd_bundle_check(courier_id):
+    """ This function updates orders' bundle attributes
+        and checks whether it is completed or not when
+        courier's attributes are changed.\n
+        Input: `courier_id`
+    """
     bundle = (OrdersBundle.query.filter_by(courier_id=courier_id,
                                            completed=False)
-                                .order_by(OrdersBundle
-                                          .bundle_id.desc())
+                                .order_by(OrdersBundle.bundle_id.desc())
                                 .first())
+    if bundle is None:
+        return
+
+    if len(bundle.orders) == 0:
+        bundle.completed = True
+        bundle.complete_time = datetime.now(tz=pytz.timezone('Europe/Moscow'))
+        bundle.deleted = True
+        return
+
     finished = bundle_finished(bundle)
     if finished is True:
         complete_bundle(bundle)
@@ -197,7 +200,7 @@ def bundle_id():
     last_bundle = OrdersBundle.query.order_by(OrdersBundle.bundle_id
                                               .desc()).first()
     if last_bundle is not None:
-        return last_bundle.bundle_id
+        return last_bundle.bundle_id + 1
     else:
         return 1
 
@@ -214,17 +217,75 @@ def bundle_finished(bundle):
 
 
 def complete_bundle(bundle, complete_time=None):
+    """ Function that makes all necessary attributes' changes
+        in `OrdersBundle` and `Couriers` objects when all orders
+        in the bundle are delivered.\n
+        As the input it takes an `OrdersBundle` object and
+        optionally a bundle completion time in `datetime` format.
+    """
     if complete_time is None:
-        complete_time = datetime.now()
+        complete_time = datetime.now(tz=pytz.timezone('Europe/Moscow'))
     bundle.completed = True
     bundle.complete_time = complete_time
-    courier = Couriers.query.get(courier_id=bundle.courier_id)
-    courier.earnings += bundle.earning
+    courier = Couriers.query.get(bundle.courier_id)
+    courier.earnings += (EARNING_COEF[bundle.init_courier_type] *
+                         BUNDLE_EARNING)
+    courier.rating = rating(courier)
+    return
 
 
-# def rating(courier):
-#     for bundle in courier.bundles:
+def order_delivery_time(order, complete_time):
+    """ This function calculates time consumed to deliver
+        the order taking as an input `Orders` object and
+        order completion time in `datetime` format.\n
+        If this is the first delivered order in the bundle,
+        delivery time is a difference between completion time
+        and bundle assign time. In case there were some
+        previously delivered orders delivery time is
+        a difference between completion time and previous
+        order completion time.
+    """
+    # TODO: !!! КОСТЫЛЬ SQLITE: УДАЛИТЬ !!!
+    complete_time = complete_time.replace(tzinfo=None)
 
+    bundle_orders = Orders.query.filter_by(bundle=order.bundle)
+    first_order = True
+    for b_order in bundle_orders:
+        if b_order.completed is True:
+            first_order = False
+            break
+
+    if first_order is True:
+        delivery_time = complete_time - order.assign_time
+    else:
+        prev_order = (Orders.query.filter_by(bundle=order.bundle)
+                                  .order_by(Orders.complete_time.desc())
+                                  .first())
+        delivery_time = complete_time - prev_order.complete_time
+        if delivery_time < timedelta():
+            return 'Order completion time is less than the previous'
+
+    return delivery_time.total_seconds()
+
+
+def rating(courier):
+    """ Function calculates courier's rating based on minimal value of
+        average delivery time per each region. If no orders were delivered,
+        the function returns `0`.\n
+        Input: `Couriers` object\n
+        Output: `float` value
+    """
+    regions = Regions.query.filter_by(courier_id=courier.courier_id)
+    delivery_times = []
+    for region in regions:
+        delivery_times.append(region.avg_delivery_time)
+    if len(delivery_times) == 0:
+        return 0
+
+    t = min(delivery_times)
+    rating = (60 * 60 - min(t, 60 * 60)) / (60 * 60) * 5
+
+    return round(rating, 2)
 
 
 """ Constant describing courier's load capacity """
@@ -244,4 +305,4 @@ EARNING_COEF = {
     'car': 9
 }
 
-ORDER_EARNING = 500
+BUNDLE_EARNING = 500

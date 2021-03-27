@@ -37,6 +37,7 @@ class Orders(db.Model):
                        db.ForeignKey('orders_bundle.bundle_id'))
     completed = db.Column(db.Boolean, default=False)
     complete_time = db.Column(db.DateTime(timezone=True))
+    delivery_time = db.Column(db.Float(precision=2))
 
     def __repr__(self):
         return (f'Orders('
@@ -58,7 +59,7 @@ class OrdersBundle(db.Model):
     assign_time = db.Column(db.DateTime(timezone=True))
     completed = db.Column(db.Boolean, default=False)
     complete_time = db.Column(db.DateTime(timezone=True))
-    earning = db.Column(db.Integer, default=0)
+    deleted = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
         return (f'OrdersBundle('
@@ -68,3 +69,23 @@ class OrdersBundle(db.Model):
 
     def __str__(self):
         return f'<Bundle id: {self.bundle_id}>'
+
+
+class Regions(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    region_id = db.Column(db.Integer, nullable=False)
+    courier_id = db.Column(db.Integer,
+                           db.ForeignKey('couriers.courier_id'))
+    avg_delivery_time = db.Column(db.Float(precision=2),
+                                  nullable=False)
+
+    def __repr__(self):
+        return (f'Regions('
+                f'region_id={self.region_id}, '
+                f'courier_id="{self.courier_id}", '
+                f'avg_delivery_time={self.avg_delivery_time})')
+
+    def __str__(self):
+        return (f'Region: {self.region_id}, '
+                f'Courier: {self.courier_id}, '
+                f'Average delivery time: {self.avg_delivery_time}')

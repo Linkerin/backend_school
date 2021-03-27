@@ -4,9 +4,8 @@ venv/
 *.pyc
 __pycache__/
 *.json
+*.sql
 
 openapi.yaml
-openapi_new.yaml
 test.py
 generate_data.py
-couriers.session.sql

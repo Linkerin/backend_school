@@ -1,4 +1,6 @@
+chardet==4.0.0
 click==7.1.2
+DateTimeRange==1.0.0
 Flask==1.1.2
 flask-marshmallow==0.14.0
 Flask-SQLAlchemy==2.5.1
@@ -8,7 +10,12 @@ Jinja2==2.11.3
 MarkupSafe==1.1.1
 marshmallow==3.10.0
 marshmallow-sqlalchemy==0.24.2
-pkg-resources==0.0.0
+mbstrdecoder==1.0.1
+packaging==20.9
+pyparsing==2.4.7
+python-dateutil==2.8.1
+pytz==2021.1
 six==1.15.0
 SQLAlchemy==1.4.1
+typepy==1.1.4
 Werkzeug==1.0.1
