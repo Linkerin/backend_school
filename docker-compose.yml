@@ -5,11 +5,11 @@ services:
   app:
     container_name: candy_delivery
     build: .
-    command: gunicorn --bind 0.0.0.0:5000 manage:app
+    command: gunicorn --bind 0.0.0.0:8080 manage:app
     env_file: 
       - ./.env
     expose:
-      - 5000
+      - 8080
     restart: unless-stopped
     depends_on:
       - db
@@ -24,9 +24,10 @@ services:
       - ./.env.db
 
   nginx:
+    container_name: flaskapp_nginx
     build: ./nginx
     ports:
-      - 8080:80
+      - 80:80
     depends_on:
       - app
     links:
