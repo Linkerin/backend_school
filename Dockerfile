@@ -7,6 +7,5 @@ ENV PYTHONDONTWRITEBYTECODE 1
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 RUN pip install gunicorn
-RUN pip install python-dotenv
 
 COPY . .
