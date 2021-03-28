@@ -43,7 +43,7 @@ def couriers():
                         couriers.append(courier)
                     else:
                         errors.append({
-                            f"id {element['order_id']}": 'id already exists'
+                            f"id {element['courier_id']}": 'id already exists'
                         })
                         invalid_ids['couriers'].append(element['courier_id'])
                 except ValidationError as err:
@@ -115,6 +115,9 @@ def courier_info(courier_id):
 
     if request.method == 'GET':
         courier = Couriers.query.get(courier_id)
+        if courier is None:
+            return 'Not Found', 404
+
         not_completed = True
         for bundle in courier.bundles:
             if bundle.completed is True and bundle.deleted is False:

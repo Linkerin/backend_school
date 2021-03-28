@@ -1,3 +1,6 @@
+.git
+.dockerignore
+
 .vscode
 venv/
 
@@ -5,11 +8,7 @@ venv/
 __pycache__/
 *.json
 *.sql
-*.sqlite
-
-.env*
 
 openapi.yaml
 test.py
 generate_data.py
-run.py

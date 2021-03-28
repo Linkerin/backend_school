@@ -1,0 +1,36 @@
+version: '3.9'
+
+services:
+
+  app:
+    container_name: candy_delivery
+    build: .
+    command: gunicorn --bind 0.0.0.0:5000 manage:app
+    env_file: 
+      - ./.env
+    expose:
+      - 5000
+    restart: unless-stopped
+    depends_on:
+      - db
+
+  db:
+    container_name: flaskapp_postgres
+    image: postgres:13
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - ./.env.db
+
+  nginx:
+    build: ./nginx
+    ports:
+      - 80:80
+    depends_on:
+      - app
+    links:
+      - app
+
+volumes:
+  postgres_data:
