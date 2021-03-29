@@ -1,18 +1,36 @@
 # Candy Delivery API
-  
-## About
-Candy Delivery API is based on REST principles to handle information about couriers and orders, make orders' assignment, reflect completion, calculate courier's earnings amount and rating. API is based on Flask framework and created as a part of the [Yandex Backend School](https://academy.yandex.ru/schools/backend) entrance test. PostgreSQL was chosen as a database and NGINX as a proxy server.
 
-## Server Deployment
+## Contents
+[About](#about)  
+[Server Deployment](#deploy)  
+[Routings](#routings)
+
+   * [/couriers](#couriers)  
+   * [/couriers/$courier_id](#couriers-id)  
+   * [/orders](#orders)  
+   * [/orders/assign](#orders-assign)  
+   * [/orders/complete](#orders-complete)
+
+[Requirements](#requirements)  
+
+
+## About <a id="about"></a>
+Candy Delivery API is based on REST principles to handle information about couriers and orders, make orders' assignment, reflect completion, calculate courier's earnings amount and rating. API is based on Flask framework and created as a part of the [Yandex Backend School](https://academy.yandex.ru/schools/backend) entrance test. [PostgreSQL](https://www.postgresql.org) was chosen as a database, [NGINX](https://www.nginx.com) as a proxy server and [Gunicorn](https://gunicorn.org) as WSGI HTTP Server.
+
+## Server Deployment <a id="deploy"></a>
 [Docker](https://www.docker.com) containers technology was used to make the installation process of Candy Delivery API rapid and easy. To deploy the server you just have to complete a few steps:
 
 1. Download and install Docker Desktop: [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop "Docker.com")  
 For Linux users you can find the [manual here](https://hub.docker.com/search?q=&type=edition&offering=community&operating_system=linux "Docker Hub").
 2. Install Docker Compose according to the guide: [https://docs.docker.com/compose/install](https://docs.docker.com/compose/install/ "Install Docker Compose").
-3. Download all the files from current [GitHub repository](https://github.com/Linkerin/backend_school) to your server.
-4. Inside the API folder (to move there you can use the change directory command in a terminal:  
-`cd /your/destination/backend_school`)  
-you should edit `.env.db` and `.env` to set your own database password and Flask secret key:  
+3. Download all the files from current [GitHub repository](https://github.com/Linkerin/backend_school) to your server and go inside the folder using terminal:
+
+   ```bash
+   git clone https://github.com/Linkerin/backend_school.git
+   cd /your/destination/backend_school
+   ```
+
+4. Inside the API folder you should edit `.env.db` and `.env` to set your own database password and Flask secret key:  
 
    .env.db
    ```python
@@ -66,11 +84,9 @@ If you need to stop and remove all the containers you can run this command:
 sudo docker-compose down -v
 ```
 
-## Documentation
+## Routings <a id="routings"></a>
 
-### Routings
-
-* #### /couriers
+* ### /couriers <a id="couriers"></a>
    Input: **JSON**  
    Allowed methods: **POST**  
    Response options:  
@@ -117,8 +133,9 @@ sudo docker-compose down -v
       }
    }
    ```
-   
+
    Fields description:
+
    | Field         | Type                       | Description                                                     |
    | ------------- |--------------------------- | --------------------------------------------------------------- |
    | courier_id    | Integer, positive          | Unique courier's ID                                             |
@@ -131,7 +148,7 @@ sudo docker-compose down -v
    * bike - 15 kg;
    * car - 50 kg.
 
-* #### /couriers/$courier_id
+* ### /couriers/$courier_id <a id="couriers-id"></a>
    Input: **JSON**  
    Allowed methods: **PATCH**, **GET**  
    Response options:  
@@ -149,7 +166,7 @@ sudo docker-compose down -v
    ```json
       PATCH /couriers/1
       {
-         "courier_type": 'bike'
+         "courier_type": "bike"
       }
    ```
 
@@ -187,7 +204,7 @@ sudo docker-compose down -v
       }
    ```
 
-* #### /orders
+* ### /orders <a id="orders"></a>
    Input: **JSON**  
    Allowed methods: **POST**  
    Response options:  
@@ -221,6 +238,7 @@ sudo docker-compose down -v
    ```
 
    Fields description:
+
    | Field          | Type                                  | Description                                                                       |
    | -------------- |-------------------------------------- | --------------------------------------------------------------------------------- |
    | order_id       | Integer, positive                     | Unique order's ID                                                                 |
@@ -258,3 +276,79 @@ sudo docker-compose down -v
       }
    }
    ```
+
+   * ### /orders/assign <a id="orders-assign"></a>
+   Input: **JSON**  
+   Allowed methods: **POST**  
+   Response options:  
+   * HTTP 200 OK
+   * HTTP 400 Bad Request
+   * HTTP 405 Method Not Allowed
+
+   This routing is used to assign orders to a courier. The routing accepts only `"courier_id"` property inside JSON with a valid ID. In case of successful assignment the server will return a JSON containing a list of assigned orders and assign time in ISO 8601 format. If there are no available orders for this courier, the server will return only an empty list of order ids without `"assign_time"` property.
+
+   POST example:
+
+   ```json
+   POST /orders/assign
+   {
+      "courier_id": 2
+   }
+   ```
+
+   Response:
+
+   ```json
+   HTTP 200 OK
+      {
+         "assign_time": "2021-03-29T11:18:03.496970+00:00",
+         "orders": [{"id": 1}, {"id": 2}, {"id": 3}]
+      }
+   ```
+
+   If you make a `POST` request for the courier who already has assigned orders you will receive information about his orders that are currently uncomleted in the same JSON format.
+
+   * ### /orders/complete <a id="orders-complete"></a>
+   Input: **JSON**  
+   Allowed methods: **POST**  
+   Response options:  
+   * HTTP 200 OK
+   * HTTP 400 Bad Request
+   * HTTP 405 Method Not Allowed
+
+   This routing is used to sent the order completion information. JSON should include valid `"courier_id"`, `"order_id"` and `"complete_time"` in ISO 8601 or RFC 3339 format. The order couldn't be completed before its' assign time or before the completion time of the previous order delivered by the courier. If everything is correct, the server will return an order ID.
+   Keep in mind that the order should be assigned to the courier stated in the `"courier_id"` field.
+
+   POST example:
+
+   ```json
+   POST /orders/assign
+   {
+      "courier_id": 2,
+      "order_id": 1,
+      "complete_time": "2021-03-29T11:44:03.31Z"
+   }
+   ```
+
+   Response:
+
+   ```json
+   HTTP 200 OK
+      {
+         "order_id": 1
+      }
+   ```
+
+   If now you make a `POST` request containing `{"courier_id": 2}` to `/orders/assign` routing, you will see that *order_id 1* was removed from the response:
+
+   ```json
+   HTTP 200 OK
+      {
+         "assign_time": "2021-03-29T11:18:03.496970+00:00",
+         "orders": [{"id": 2}, {"id": 3}]
+      }
+   ```
+
+   ## Requirements <a id="requirements"></a>
+
+   In case you want to start a Flask app without deploying it using Docker all the required pip packages are listed in the [requirements.txt](https://github.com/Linkerin/backend_school/blob/main/requirements.txt) inside this repository.
