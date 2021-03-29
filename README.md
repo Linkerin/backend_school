@@ -77,7 +77,7 @@ For Linux users you can find the [manual here](https://hub.docker.com/search?q=&
 7. That's it! Now everything should be working just fine. Test it out connecting to your server IP address. You will see the following message:  
    > Candy Delivery App API
 
-   Note: NGINX server runs on port 80.  
+   Note: NGINX server runs on port 80, Flask application itself on port 8080.  
 ---
 If you need to stop and remove all the containers you can run this command:
 ```bash
@@ -141,7 +141,7 @@ sudo docker-compose down -v
    | courier_id    | Integer, positive          | Unique courier's ID                                             |
    | courier_type  | String                     | Possible values: 'foot', 'bike', 'car'                          |
    | regions       | Array of positive integers | List of regions' IDs where a courier can work                   |
-   | working_hours | Array of strings           | Courier's work shedule in the following format: `"HH:MM-HH:MM"` |
+   | working_hours | Array of strings           | Courier's work schedule in the following format: `"HH:MM-HH:MM"` |
 
    Courier's load capacity depends on his type:  
    * foot - 10 kg;
@@ -157,10 +157,11 @@ sudo docker-compose down -v
    * HTTP 404 Not Found
    * HTTP 405 Method Not Allowed
 
-   This routing is used to change the courier's information and accepts JSON with any fields from the list: `courier_type`, `regions`, `working_hours`. Additional properties are now allowed: in this case the server will return `HTTP 400 Bad Request` response. Keep in mind that the change of courier's attributes will affect the set of orders already assigned to him. For example, if you change `courier_type` (which means you change his load capacity) total weight of all uncompleted couriers's assigned orders will be recalculated and exceeding orders will become available for assignment.  
+   This routing is used to change the courier's information and accepts JSON with any fields from the list: `courier_type`, `regions`, `working_hours`. Additional properties are not allowed: in this case the server will return `HTTP 400 Bad Request` response.  
+   Keep in mind that the change of courier's attributes will affect the set of orders already assigned to him. For example, if you change `courier_type` (which means you change his load capacity) total weight of all uncompleted couriers's assigned orders will be recalculated and exceeding orders will become available for assignment.  
    Data format requirements are the same as for `/couriers` routing.
 
-   `GET` method returns courier's information. It also returns his rating and total earnings if the courier had at least one completed orders assignment.
+   `GET` method for this routing returns courier's information. It also returns his rating and total earnings if the courier had at least one completed orders assignment.
 
    Example:
    ```json
@@ -181,7 +182,7 @@ sudo docker-compose down -v
       }
    ```
 
-   Attempt to update non-existent courier:
+   Attempt to update a non-existent courier:
    ```json
    PATCH /couriers/200
       {
@@ -190,6 +191,8 @@ sudo docker-compose down -v
       }
    ```
    And the response wil be `HTTP 404 Not Found`.
+
+   ---
 
    `GET` request example:
    ```json
@@ -242,7 +245,7 @@ sudo docker-compose down -v
    | Field          | Type                                  | Description                                                                       |
    | -------------- |-------------------------------------- | --------------------------------------------------------------------------------- |
    | order_id       | Integer, positive                     | Unique order's ID                                                                 |
-   | weight         | Number, precision: 2 digits, positive | Order's weight. Should be more that or equal to 0.01 and less that or equal to 50 |
+   | weight         | Number, precision: 2 digits, positive | Order's weight should be greater than or equal to 0.01 and less than or equal to 50 |
    | region         | Integer, positive                     | List of regions' IDs where a courier can work                                     |
    | delivery_hours | Array of strings                      | Time periods when the customer can accept the delivery in the following format: `"HH:MM-HH:MM"` |
 
@@ -285,7 +288,7 @@ sudo docker-compose down -v
    * HTTP 400 Bad Request
    * HTTP 405 Method Not Allowed
 
-   This routing is used to assign orders to a courier. The routing accepts only `"courier_id"` property inside JSON with a valid ID. In case of successful assignment the server will return a JSON containing a list of assigned orders and assign time in ISO 8601 format. If there are no available orders for this courier, the server will return only an empty list of order ids without `"assign_time"` property.
+   This routing is used to assign orders to a courier. The routing accepts only `"courier_id"` property inside JSON with a valid ID. In case of successful assignment the server will return a JSON containing a list of assigned orders and assign time in ISO 8601 format. If there are no available orders for this courier, the server will return only an empty list of order IDs without `"assign_time"` property.
 
    POST example:
 
@@ -316,7 +319,7 @@ sudo docker-compose down -v
    * HTTP 400 Bad Request
    * HTTP 405 Method Not Allowed
 
-   This routing is used to sent the order completion information. JSON should include valid `"courier_id"`, `"order_id"` and `"complete_time"` in ISO 8601 or RFC 3339 format. The order couldn't be completed before its' assign time or before the completion time of the previous order delivered by the courier. If everything is correct, the server will return an order ID.
+   This routing is used for sending the order completion information. JSON should include valid `"courier_id"`, `"order_id"` and `"complete_time"` in ISO 8601 or RFC 3339 format. The order couldn't be completed before its' assign time or before the completion time of the previous order delivered by the courier. If everything is correct, the server will return an order ID.
    Keep in mind that the order should be assigned to the courier stated in the `"courier_id"` field.
 
    POST example:
