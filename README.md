@@ -293,13 +293,13 @@ sudo docker-compose down -v
    POST example:
 
    ```json
-   POST /orders/assign
-   {
-      "courier_id": 2
-   }
-   ```
+   POST /orders/assign## Requirements <a id="requirements"></a>
 
-   Response:
+In case you want to start a Flask app without deploying it using Docker all the required pip packages are listed in the [requirements.txt](https://github.com/Linkerin/backend_school/blob/main/requirements.txt) inside this repository. Install them using the following command:
+
+```bash
+pip install -r requirements.txt
+```
 
    ```json
    HTTP 200 OK
@@ -352,10 +352,10 @@ sudo docker-compose down -v
       }
    ```
 
-   ## Requirements <a id="requirements"></a>
+## Requirements <a id="requirements"></a>
 
-   In case you want to start a Flask app without deploying it using Docker all the required pip packages are listed in the [requirements.txt](https://github.com/Linkerin/backend_school/blob/main/requirements.txt) inside this repository. Install them using the following command:
+In case you want to start a Flask app without deploying it using Docker all the required pip packages are listed in the [requirements.txt](https://github.com/Linkerin/backend_school/blob/main/requirements.txt) inside this repository. Install them using the following command:
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
